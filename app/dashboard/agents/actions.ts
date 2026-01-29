@@ -10,6 +10,7 @@ export async function createAgent(formData: FormData) {
   // 1. Pega usuário e verifica autenticação
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
+    // Se não tiver usuário, redireciona para login
     redirect('/login')
   }
 
@@ -21,6 +22,7 @@ export async function createAgent(formData: FormData) {
     .single()
 
   if (!perfil?.empresa_id) {
+    // Em Server Action puro, lançamos erro para parar a execução
     throw new Error('Empresa não encontrada')
   }
 
@@ -36,14 +38,15 @@ export async function createAgent(formData: FormData) {
     .eq('ativo', true)
 
   if (countError) {
+    console.error('Erro ao verificar limites:', countError)
     throw new Error('Erro ao verificar limites do plano')
   }
 
   const agentesAtuais = count || 0
 
-  // 4. BLOQUEIO: Se atingiu o limite, redireciona para o plano (Melhor UX)
+  // 4. BLOQUEIO: Se atingiu o limite, redireciona para Assinatura
   if (agentesAtuais >= limiteAgentes) {
-    // Ao invés de retornar erro (que quebrava o build), redirecionamos
+    console.log(`Bloqueio: Limite de ${limiteAgentes} atingido. Redirecionando.`)
     redirect('/dashboard/subscription')
   }
 
@@ -52,8 +55,7 @@ export async function createAgent(formData: FormData) {
   const prompt = formData.get('prompt') as string
   
   if (!nome || !prompt) {
-    // Se faltar dados, apenas recarrega (ou poderia redirecionar com ?error=missing)
-    throw new Error('Campos obrigatórios faltando')
+    throw new Error('Preencha todos os campos obrigatórios')
   }
 
   // 6. Insere no banco
@@ -67,9 +69,10 @@ export async function createAgent(formData: FormData) {
 
   if (error) {
     console.error(error)
-    throw new Error('Erro ao criar agente no banco de dados')
+    throw new Error('Erro ao criar agente')
   }
 
+  // Sucesso! Limpa o cache e redireciona
   revalidatePath('/dashboard/agents')
   redirect('/dashboard/agents')
 }
@@ -78,6 +81,7 @@ export async function deleteAgent(formData: FormData) {
   const id = formData.get('id') as string
   const supabase = await createClient()
 
+  // Aqui não precisamos validar plano, pois deletar é sempre permitido
   await supabase.from('agentes_ia').delete().eq('id', id)
   
   revalidatePath('/dashboard/agents')
