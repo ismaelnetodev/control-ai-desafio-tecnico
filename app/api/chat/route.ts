@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
 
     // 4. Obter dados da requisição
     const body = await request.json()
-    const { message, conversa_id } = body
+    const { message, conversa_id, agent_id } = body
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json(
@@ -93,6 +93,22 @@ export async function POST(request: NextRequest) {
       // Buscar histórico da conversa se existir
       let messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = []
       
+      // Adicionar prompt do sistema do agente se existir
+      if (agent_id) {
+        const { data: agente } = await supabase
+          .from('agentes_ia')
+          .select('prompt_sistema')
+          .eq('id', agent_id)
+          .single()
+        
+        if (agente?.prompt_sistema) {
+          messages.push({
+            role: 'system',
+            content: agente.prompt_sistema,
+          })
+        }
+      }
+      
       if (conversa_id) {
         const { data: historico } = await supabase
           .from('mensagens')
@@ -102,10 +118,13 @@ export async function POST(request: NextRequest) {
           .limit(20) // Limitar histórico
 
         if (historico) {
-          messages = historico.map((msg) => ({
-            role: msg.role as 'user' | 'assistant' | 'system',
-            content: msg.conteudo,
-          }))
+          messages = [
+            ...messages,
+            ...historico.map((msg) => ({
+              role: msg.role as 'user' | 'assistant' | 'system',
+              content: msg.conteudo,
+            }))
+          ]
         }
       }
 
@@ -148,7 +167,8 @@ export async function POST(request: NextRequest) {
               conversa_id,
               message,
               fullResponse,
-              totalTokens
+              totalTokens,
+              agent_id
             )
 
             controller.close()
@@ -175,7 +195,8 @@ export async function POST(request: NextRequest) {
       conversa_id,
       message,
       assistantResponse,
-      tokensUsed
+      tokensUsed,
+      agent_id
     )
 
     return NextResponse.json({
@@ -198,18 +219,24 @@ async function saveMessagesAndUsage(
   conversaId: string | null | undefined,
   userMessage: string,
   assistantResponse: string,
-  tokensUsed: number
+  tokensUsed: number,
+  agentId?: string | null
 ) {
   try {
     // Criar ou usar conversa existente
     let finalConversaId = conversaId
 
     if (!finalConversaId) {
+      // Criar título a partir da mensagem
+      const titulo = userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : '')
+      
       const { data: novaConversa, error: conversaError } = await supabase
         .from('conversas')
         .insert({
           empresa_id: empresaId,
           usuario_id: userId,
+          titulo: titulo,
+          agente_id: agentId,
         })
         .select('id')
         .single()
@@ -254,6 +281,7 @@ async function saveMessagesAndUsage(
       quantidade: tokensUsed,
       metadata: {
         model: 'gpt-4o-mini',
+        agent_id: agentId,
       },
     })
 
