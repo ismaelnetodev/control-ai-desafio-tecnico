@@ -44,13 +44,17 @@ const DropdownMenuTrigger = React.forwardRef<
   if (!context) throw new Error('DropdownMenuTrigger must be used within DropdownMenu')
 
   if (asChild && React.isValidElement(children)) {
-    return React.cloneElement(children, {
+    // Cast children para ReactElement para acessar props
+    const child = children as React.ReactElement<any>;
+    
+    return React.cloneElement(child, {
       onClick: (e: React.MouseEvent) => {
         context.setOpen(!context.open)
-        children.props.onClick?.(e)
+        child.props.onClick?.(e)
       },
       ref,
-    } as any)
+      ...props
+    })
   }
 
   return (
@@ -105,20 +109,22 @@ const DropdownMenuItem = React.forwardRef<
   const context = React.useContext(DropdownMenuContext)
 
   if (asChild && React.isValidElement(children)) {
-    return React.cloneElement(children, {
+    const child = children as React.ReactElement<any>;
+    
+    return React.cloneElement(child, {
       ref,
       className: cn(
         "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         inset && "pl-8",
         className,
-        children.props.className
+        child.props.className
       ),
       onClick: (e: React.MouseEvent) => {
         context?.setOpen(false)
-        children.props.onClick?.(e)
+        child.props.onClick?.(e)
       },
       ...props
-    } as any)
+    })
   }
 
   return (
@@ -129,7 +135,10 @@ const DropdownMenuItem = React.forwardRef<
         inset && "pl-8",
         className
       )}
-      onClick={() => context?.setOpen(false)}
+      onClick={(e) => {
+        context?.setOpen(false)
+        props.onClick?.(e)
+      }}
       {...props}
     >
       {children}

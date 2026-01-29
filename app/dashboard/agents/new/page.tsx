@@ -35,7 +35,6 @@ export default async function NewAgentPage() {
 
   const currentAgentes = count || 0
 
-  // SE ATINGIU O LIMITE -> Redireciona para Assinatura
   if (currentAgentes >= maxAgentes) {
     redirect('/dashboard/subscription')
   }
