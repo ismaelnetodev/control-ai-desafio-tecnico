@@ -86,7 +86,6 @@ export default async function SubscriptionPage() {
             <ul className="space-y-3 text-sm">
                 <li className="flex items-center"><Check className="mr-2 h-4 w-4 text-primary" /> <strong>Agentes Ilimitados</strong></li>
                 <li className="flex items-center"><Check className="mr-2 h-4 w-4 text-primary" /> Histórico Ilimitado</li>
-                <li className="flex items-center"><Check className="mr-2 h-4 w-4 text-primary" /> Segurança Avançada (BYOK)</li>
                 <li className="flex items-center"><Check className="mr-2 h-4 w-4 text-primary" /> Suporte Prioritário</li>
             </ul>
           </CardContent>

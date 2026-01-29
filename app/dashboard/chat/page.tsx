@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, FormEvent } from 'react'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Bot, User, Send, Loader2, MessageSquare, PlusCircle } from 'lucide-react'
+import { Bot, User, Send, Loader2, MessageSquare, PlusCircle, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import {
@@ -14,8 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import Link from 'next/link'
 
-// Tipos
 interface Message {
   role: 'user' | 'assistant'
   content: string
@@ -35,22 +35,19 @@ interface Conversa {
 export default function ChatPage() {
   const supabase = createClient()
   
-  // Estados de Dados
   const [messages, setMessages] = useState<Message[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
   const [conversas, setConversas] = useState<Conversa[]>([])
   
-  // Estados de Seleção
   const [selectedAgentId, setSelectedAgentId] = useState<string>('')
   const [conversaId, setConversaId] = useState<string | null>(null)
+  const [isPro, setIsPro] = useState(false)
   
-  // Estados de UI
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [streamingMessage, setStreamingMessage] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // 1. Inicialização: Carregar Agentes e Lista de Conversas
   useEffect(() => {
     async function initData() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -58,12 +55,15 @@ export default function ChatPage() {
 
       const { data: perfil } = await supabase
         .from('perfis')
-        .select('empresa_id')
+        .select('empresa_id, empresas(plano)')
         .eq('id', user.id)
         .single()
       
       if (perfil?.empresa_id) {
-        // Buscar Agentes
+        const dadosEmpresa = perfil.empresas as any
+        const plano = dadosEmpresa?.plano || 'free'
+        setIsPro(plano === 'pro')
+
         const { data: agentsData } = await supabase
           .from('agentes_ia')
           .select('id, nome, modelo')
@@ -75,29 +75,33 @@ export default function ChatPage() {
           setSelectedAgentId(agentsData[0].id)
         }
 
-        // Buscar Histórico de Conversas
-        fetchConversas(perfil.empresa_id)
+        fetchConversas(perfil.empresa_id, plano)
       }
     }
     initData()
   }, [])
 
-  // Função auxiliar para buscar a lista de conversas no banco
-  async function fetchConversas(empresaId: string) {
-    const { data } = await supabase
+  async function fetchConversas(empresaId: string, plano: string) {
+    let query = supabase
       .from('conversas')
       .select('id, created_at')
       .eq('empresa_id', empresaId)
       .order('created_at', { ascending: false })
     
+    if (plano === 'free') {
+      const tresDiasAtras = new Date()
+      tresDiasAtras.setDate(tresDiasAtras.getDate() - 3)
+      query = query.gte('created_at', tresDiasAtras.toISOString())
+    }
+    
+    const { data } = await query
     if (data) setConversas(data)
   }
 
-  // 2. Carregar mensagens de uma conversa específica (Histórico)
   const loadConversation = async (id: string) => {
     setIsLoading(true)
     setConversaId(id)
-    setMessages([]) // Limpa a tela visualmente enquanto carrega
+    setMessages([])
     
     const { data } = await supabase
       .from('mensagens')
@@ -114,25 +118,21 @@ export default function ChatPage() {
     setIsLoading(false)
   }
 
-  // 3. Resetar para criar nova conversa
   const startNewChat = () => {
     setConversaId(null)
     setMessages([])
     setStreamingMessage('')
   }
 
-  // Scroll automático para o fundo
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingMessage])
 
-  // Envio de Mensagem
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const userMessage = input.trim()
     if (!userMessage || isLoading) return
 
-    // UI Otimista
     const newUserMessage: Message = { role: 'user', content: userMessage }
     setMessages((prev) => [...prev, newUserMessage])
     setInput('')
@@ -145,26 +145,26 @@ export default function ChatPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMessage,
-          conversa_id: conversaId, // Se for null, o backend cria uma nova
+          conversa_id: conversaId,
           agent_id: selectedAgentId
         }),
       })
 
       if (!response.ok) throw new Error('Erro na requisição')
 
-      // Se a conversa era nova (conversaId null), atualizamos a lista lateral
       if (!conversaId) {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-           // Pequeno delay para garantir que o banco processou a criação
            setTimeout(async () => {
-              const { data: perfil } = await supabase.from('perfis').select('empresa_id').eq('id', user.id).single()
-              if (perfil) fetchConversas(perfil.empresa_id)
+              const { data: perfil } = await supabase.from('perfis').select('empresa_id, empresas(plano)').eq('id', user.id).single()
+              if (perfil) {
+                const dadosEmpresa = perfil.empresas as any
+                fetchConversas(perfil.empresa_id, dadosEmpresa?.plano || 'free')
+              }
            }, 1000)
         }
       }
 
-      // Processamento da Resposta (Stream vs JSON)
       const contentType = response.headers.get('content-type') || ''
       if (contentType.includes('application/json')) {
         const data = await response.json()
@@ -199,7 +199,6 @@ export default function ChatPage() {
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-4">
       
-      {/* --- SIDEBAR DE HISTÓRICO (NOVO) --- */}
       <Card className="w-64 hidden md:flex flex-col overflow-hidden bg-slate-50/50">
         <div className="p-4 border-b">
           <Button onClick={startNewChat} className="w-full gap-2" variant="outline">
@@ -208,8 +207,16 @@ export default function ChatPage() {
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {conversas.length === 0 && (
-             <p className="text-xs text-center text-muted-foreground py-4">Sem histórico</p>
+             <div className="text-center py-4 space-y-2">
+                <p className="text-xs text-muted-foreground">Sem histórico recente</p>
+                {!isPro && (
+                  <p className="text-[10px] text-muted-foreground px-2">
+                    O histórico antigo é ocultado no plano Free.
+                  </p>
+                )}
+             </div>
           )}
+          
           {conversas.map((c) => (
             <button
               key={c.id}
@@ -226,11 +233,20 @@ export default function ChatPage() {
             </button>
           ))}
         </div>
+        
+        {!isPro && conversas.length > 0 && (
+          <div className="p-3 border-t bg-slate-100/50">
+            <Link href="/dashboard/subscription">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors cursor-pointer">
+                <Lock className="h-3 w-3" />
+                <span>Ver histórico antigo</span>
+              </div>
+            </Link>
+          </div>
+        )}
       </Card>
 
-      {/* --- ÁREA PRINCIPAL DO CHAT --- */}
       <Card className="flex-1 flex flex-col overflow-hidden shadow-sm">
-        {/* Header do Chat */}
         <div className="p-4 border-b flex items-center justify-between bg-white">
           <div className="flex items-center gap-2">
             <Bot className="h-5 w-5 text-primary" />
@@ -251,7 +267,6 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Lista de Mensagens */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30">
           {messages.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-60">
@@ -276,7 +291,6 @@ export default function ChatPage() {
             </div>
           ))}
 
-          {/* Mensagem sendo digitada (Stream) */}
           {streamingMessage && (
              <div className="flex gap-3 justify-start">
                <div className="h-8 w-8 rounded-full bg-white border flex items-center justify-center"><Bot className="h-4 w-4" /></div>
@@ -288,7 +302,6 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input de Texto */}
         <div className="p-4 bg-white border-t">
           <form onSubmit={handleSubmit} className="flex gap-2">
             <Input 

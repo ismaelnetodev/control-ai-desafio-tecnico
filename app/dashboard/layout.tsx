@@ -12,8 +12,9 @@ import {
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { logoutAction } from './actions'
-import { LogOut } from 'lucide-react'
+import { LogOut, ShieldCheck } from 'lucide-react' // Importei o ShieldCheck
 import { SidebarMenu } from '@/components/dashboard/sidebar-menu'
+import Link from 'next/link' // Importei o Link
 
 export default async function DashboardLayout({
   children,
@@ -39,6 +40,7 @@ export default async function DashboardLayout({
   const empresaNome = perfil?.empresas?.nome || 'Sua Empresa'
   const userEmail = user.email || ''
   const userName = user.user_metadata?.full_name || userEmail.split('@')[0]
+  const isSuperAdmin = perfil?.is_super_admin // Pegamos a flag aqui
   
   // Lógica para iniciais do nome
   const initials = userName
@@ -86,11 +88,20 @@ export default async function DashboardLayout({
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               
-              {/* SOLUÇÃO DEFINITIVA:
-                  Removemos o <DropdownMenuItem> e usamos uma <div> simples.
-                  Copiamos as classes CSS do shadcn para manter o visual idêntico (hover, tamanho, etc),
-                  mas sem o JavaScript que bloqueia o formulário.
-              */}
+              {/* --- ITEM DE SUPER ADMIN (Só aparece se tiver a flag) --- */}
+              {isSuperAdmin && (
+                <>
+                  <DropdownMenuItem asChild>
+                    <Link href="/master" className="cursor-pointer text-emerald-600 focus:text-emerald-700 focus:bg-emerald-50">
+                      <ShieldCheck className="mr-2 h-4 w-4" />
+                      <span>Painel Master</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+
+              {/* Botão de Sair */}
               <div className="p-1">
                 <form action={logoutAction}>
                   <button 
