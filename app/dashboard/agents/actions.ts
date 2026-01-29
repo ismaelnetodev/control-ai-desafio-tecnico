@@ -9,42 +9,42 @@ export async function createAgent(formData: FormData) {
 
   // 1. Pega usuário e verifica autenticação
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Não autorizado' }
+  if (!user) {
+    redirect('/login')
+  }
 
   // 2. Busca o ID da empresa e os LIMITES do plano atual
-  // O join "empresas(plano, max_agentes)" traz os dados da tabela relacionada
   const { data: perfil } = await supabase
     .from('perfis')
     .select('empresa_id, empresas(plano, max_agentes)')
     .eq('id', user.id)
     .single()
 
-  if (!perfil?.empresa_id) return { error: 'Empresa não encontrada' }
+  if (!perfil?.empresa_id) {
+    throw new Error('Empresa não encontrada')
+  }
 
   const empresaId = perfil.empresa_id
-  // Tipagem forçada rápida (any) para evitar erros de TS no join se os tipos não foram gerados
   const dadosEmpresa = perfil.empresas as any 
-  const limiteAgentes = dadosEmpresa?.max_agentes || 1 // Padrão é 1 se não estiver definido
+  const limiteAgentes = dadosEmpresa?.max_agentes || 1
 
   // 3. CONTAGEM: Verifica quantos agentes a empresa JÁ tem
   const { count, error: countError } = await supabase
     .from('agentes_ia')
-    .select('*', { count: 'exact', head: true }) // head: true traz só o número, economiza dados
+    .select('*', { count: 'exact', head: true })
     .eq('empresa_id', empresaId)
+    .eq('ativo', true)
 
   if (countError) {
-    console.error('Erro ao verificar limites:', countError)
-    return { error: 'Erro ao verificar limites do plano' }
+    throw new Error('Erro ao verificar limites do plano')
   }
 
   const agentesAtuais = count || 0
 
-  // 4. BLOQUEIO: Se atingiu o limite, impede a criação
+  // 4. BLOQUEIO: Se atingiu o limite, redireciona para o plano (Melhor UX)
   if (agentesAtuais >= limiteAgentes) {
-    console.log(`Bloqueio: Empresa tentou criar agente ${agentesAtuais + 1}, mas o limite é ${limiteAgentes}`)
-    // Como não estamos usando useFormState no front ainda, isso vai apenas falhar silenciosamente na UI
-    // mas garante a segurança no backend.
-    return { error: `Limite do plano atingido. Seu plano permite apenas ${limiteAgentes} agentes.` }
+    // Ao invés de retornar erro (que quebrava o build), redirecionamos
+    redirect('/dashboard/subscription')
   }
 
   // 5. Pega dados do formulário
@@ -52,10 +52,11 @@ export async function createAgent(formData: FormData) {
   const prompt = formData.get('prompt') as string
   
   if (!nome || !prompt) {
-    return { error: 'Preencha todos os campos obrigatórios' }
+    // Se faltar dados, apenas recarrega (ou poderia redirecionar com ?error=missing)
+    throw new Error('Campos obrigatórios faltando')
   }
 
-  // 6. Insere no banco (Se passou por todas as verificações)
+  // 6. Insere no banco
   const { error } = await supabase.from('agentes_ia').insert({
     nome,
     prompt_sistema: prompt,
@@ -66,7 +67,7 @@ export async function createAgent(formData: FormData) {
 
   if (error) {
     console.error(error)
-    return { error: 'Erro ao criar agente' }
+    throw new Error('Erro ao criar agente no banco de dados')
   }
 
   revalidatePath('/dashboard/agents')
@@ -77,7 +78,6 @@ export async function deleteAgent(formData: FormData) {
   const id = formData.get('id') as string
   const supabase = await createClient()
 
-  // Aqui não precisamos validar plano, pois deletar é sempre permitido
   await supabase.from('agentes_ia').delete().eq('id', id)
   
   revalidatePath('/dashboard/agents')
