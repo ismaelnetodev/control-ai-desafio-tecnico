@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Check, Zap, Shield } from 'lucide-react'
+import { Check, Zap } from 'lucide-react'
 import { upgradePlan, downgradePlan } from './actions'
 import { Badge } from '@/components/ui/badge'
 
@@ -18,9 +18,18 @@ export default async function SubscriptionPage() {
     .eq('id', user.id)
     .single()
 
-  // Se for null ou undefined, assume 'free'
-  // O TypeScript pode reclamar se empresas for array, mas com .single() é objeto
-  const planoAtual = perfil?.empresas?.plano || 'free'
+  // Correção do erro de TypeScript
+  const empresasData = perfil?.empresas as { plano: string } | { plano: string }[] | null
+  let planoAtual = 'free'
+  
+  if (empresasData) {
+    if (Array.isArray(empresasData)) {
+      planoAtual = empresasData[0]?.plano || 'free'
+    } else {
+      planoAtual = empresasData.plano || 'free'
+    }
+  }
+
   const isPro = planoAtual === 'pro'
 
   return (

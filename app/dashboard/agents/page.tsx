@@ -20,16 +20,23 @@ export default async function DashboardPage() {
     .single()
 
   if (!perfil?.empresa_id) {
-    redirect('/login') // Ou uma página de erro
+    redirect('/login')
   }
 
-  // --- CORREÇÃO DO ERRO DE BUILD ---
-  // O TypeScript acha que 'empresas' é um array. Usamos 'as any' para flexibilizar
-  // e verificamos se é array para pegar o primeiro item com segurança.
-  const empresaData = perfil.empresas as any
-  const empresa = Array.isArray(empresaData) ? empresaData[0] : empresaData
-  const empresaNome = empresa?.nome || 'Sua Empresa'
-  // ---------------------------------
+  // Correção do erro de TypeScript
+  const empresasData = perfil.empresas as { nome: string; plano: string } | { nome: string; plano: string }[] | null
+  let empresaNome = 'Sua Empresa'
+  let planoAtual = 'free'
+  
+  if (empresasData) {
+    if (Array.isArray(empresasData)) {
+      empresaNome = empresasData[0]?.nome || 'Sua Empresa'
+      planoAtual = empresasData[0]?.plano || 'free'
+    } else {
+      empresaNome = empresasData.nome || 'Sua Empresa'
+      planoAtual = empresasData.plano || 'free'
+    }
+  }
 
   // 3. Buscar Métricas (KPIs)
   
@@ -91,7 +98,7 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold capitalize">
-              {empresa?.plano || 'Free'}
+              {planoAtual}
             </div>
             <p className="text-xs text-muted-foreground">
               Plano atual

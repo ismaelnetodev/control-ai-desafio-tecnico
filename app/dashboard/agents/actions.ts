@@ -10,7 +10,6 @@ export async function createAgent(formData: FormData) {
   // 1. Pega usuário e verifica autenticação
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
-    // Se não tiver usuário, redireciona para login
     redirect('/login')
   }
 
@@ -22,13 +21,22 @@ export async function createAgent(formData: FormData) {
     .single()
 
   if (!perfil?.empresa_id) {
-    // Em Server Action puro, lançamos erro para parar a execução
     throw new Error('Empresa não encontrada')
   }
 
   const empresaId = perfil.empresa_id
-  const dadosEmpresa = perfil.empresas as any 
-  const limiteAgentes = dadosEmpresa?.max_agentes || 1
+  
+  // Correção do erro de TypeScript
+  const empresasData = perfil.empresas as { plano: string; max_agentes: number } | { plano: string; max_agentes: number }[] | null
+  let limiteAgentes = 1
+  
+  if (empresasData) {
+    if (Array.isArray(empresasData)) {
+      limiteAgentes = empresasData[0]?.max_agentes || 1
+    } else {
+      limiteAgentes = empresasData.max_agentes || 1
+    }
+  }
 
   // 3. CONTAGEM: Verifica quantos agentes a empresa JÁ tem
   const { count, error: countError } = await supabase
@@ -81,7 +89,6 @@ export async function deleteAgent(formData: FormData) {
   const id = formData.get('id') as string
   const supabase = await createClient()
 
-  // Aqui não precisamos validar plano, pois deletar é sempre permitido
   await supabase.from('agentes_ia').delete().eq('id', id)
   
   revalidatePath('/dashboard/agents')

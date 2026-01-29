@@ -12,9 +12,9 @@ import {
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { logoutAction } from './actions'
-import { LogOut, ShieldCheck } from 'lucide-react' // Importei o ShieldCheck
+import { LogOut, ShieldCheck } from 'lucide-react'
 import { SidebarMenu } from '@/components/dashboard/sidebar-menu'
-import Link from 'next/link' // Importei o Link
+import Link from 'next/link'
 
 export default async function DashboardLayout({
   children,
@@ -37,10 +37,21 @@ export default async function DashboardLayout({
     .eq('id', user.id)
     .single()
 
-  const empresaNome = perfil?.empresas?.nome || 'Sua Empresa'
+  // Correção do erro de TypeScript
+  const empresasData = perfil?.empresas as { nome: string } | { nome: string }[] | null
+  let empresaNome = 'Sua Empresa'
+  
+  if (empresasData) {
+    if (Array.isArray(empresasData)) {
+      empresaNome = empresasData[0]?.nome || 'Sua Empresa'
+    } else {
+      empresaNome = empresasData.nome || 'Sua Empresa'
+    }
+  }
+
   const userEmail = user.email || ''
   const userName = user.user_metadata?.full_name || userEmail.split('@')[0]
-  const isSuperAdmin = perfil?.is_super_admin // Pegamos a flag aqui
+  const isSuperAdmin = perfil?.is_super_admin
   
   // Lógica para iniciais do nome
   const initials = userName

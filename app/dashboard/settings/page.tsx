@@ -27,9 +27,17 @@ export default async function SettingsPage() {
     .eq('id', user.id)
     .single()
 
-  // Verificar se existe uma chave criptografada
-  const empresa = perfil?.empresas as { api_key_encrypted: string | null } | null
-  const hasApiKey = !!(empresa?.api_key_encrypted)
+  // Correção do erro de TypeScript
+  const empresasData = perfil?.empresas as { api_key_encrypted: string | null } | { api_key_encrypted: string | null }[] | null
+  let hasApiKey = false
+  
+  if (empresasData) {
+    if (Array.isArray(empresasData)) {
+      hasApiKey = !!(empresasData[0]?.api_key_encrypted)
+    } else {
+      hasApiKey = !!(empresasData.api_key_encrypted)
+    }
+  }
 
   return (
     <div className="space-y-6">

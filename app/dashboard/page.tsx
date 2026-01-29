@@ -28,7 +28,18 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single()
 
-  const empresaNome = perfil?.empresas?.nome || 'Sua Empresa'
+  // Correção do erro de TypeScript
+  const empresasData = perfil?.empresas as { nome: string } | { nome: string }[] | null
+  let empresaNome = 'Sua Empresa'
+  
+  if (empresasData) {
+    if (Array.isArray(empresasData)) {
+      empresaNome = empresasData[0]?.nome || 'Sua Empresa'
+    } else {
+      empresaNome = empresasData.nome || 'Sua Empresa'
+    }
+  }
+  
   const empresaId = perfil?.empresa_id
 
   // Se não tiver empresa (erro de cadastro), interrompe visualização
@@ -48,7 +59,7 @@ export default async function DashboardPage() {
       .select('quantidade')
       .eq('empresa_id', empresaId),
 
-    // C: Conta quantos agentes existem (mesmo que a tabela esteja vazia agora)
+    // C: Conta quantos agentes existem
     supabase
       .from('agentes_ia')
       .select('*', { count: 'exact', head: true })
@@ -58,12 +69,12 @@ export default async function DashboardPage() {
   // 4. Processamento dos Números
   const totalConversas = conversasReq.count || 0
   
-  // Soma manual dos tokens (Supabase JS não tem .sum() nativo simples)
+  // Soma manual dos tokens
   const totalTokens = tokensReq.data?.reduce((acc, curr) => acc + (curr.quantidade || 0), 0) || 0
   
   const totalAgentes = agentesReq.count || 0
 
-  // Função para deixar bonito (ex: 1.500 em vez de 1500)
+  // Função para formatar números
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('pt-BR').format(num)
   }
@@ -72,19 +83,19 @@ export default async function DashboardPage() {
   const stats = [
     {
       title: 'Total de Conversas',
-      value: formatNumber(totalConversas), // Valor real
+      value: formatNumber(totalConversas),
       description: 'Número total de conversas realizadas',
       icon: MessageSquare,
     },
     {
       title: 'Tokens Usados',
-      value: formatNumber(totalTokens), // Valor real
+      value: formatNumber(totalTokens),
       description: 'Total de tokens consumidos',
       icon: Zap,
     },
     {
       title: 'Agentes Ativos',
-      value: formatNumber(totalAgentes), // Valor real
+      value: formatNumber(totalAgentes),
       description: 'Agentes de IA em funcionamento',
       icon: Bot,
     },
@@ -113,7 +124,6 @@ export default async function DashboardPage() {
                 <Icon className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {/* Aqui entra o valor dinâmico */}
                 <div className="text-2xl font-bold">{stat.value}</div>
                 <CardDescription className="text-xs mt-1">
                   {stat.description}
