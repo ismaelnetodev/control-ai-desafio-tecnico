@@ -10,8 +10,18 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import Link from 'next/link'
+import { AlertCircle } from 'lucide-react'
 
-export default function LoginPage() {
+// Recebe searchParams para ler a mensagem de erro da URL
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ message?: string }>
+}) {
+  // Em Next.js 15, searchParams é uma Promise e precisa de await
+  const params = await searchParams
+  const errorMessage = params?.message
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
       <Card className="w-full max-w-md shadow-lg">
@@ -23,6 +33,15 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form action={loginAction} className="space-y-4">
+            
+            {/* Bloco de Erro (Só aparece se tiver erro na URL) */}
+            {errorMessage && (
+              <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md flex items-center gap-2 border border-red-200">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{decodeURIComponent(errorMessage)}</span>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
