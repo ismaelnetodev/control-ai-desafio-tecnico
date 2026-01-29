@@ -8,9 +8,7 @@ export async function loginAction(formData: FormData) {
   const password = formData.get('password') as string
 
   if (!email || !password) {
-    return {
-      error: 'Email e senha são obrigatórios',
-    }
+    redirect('/login?error=missing_credentials')
   }
 
   const supabase = await createClient()
@@ -21,9 +19,7 @@ export async function loginAction(formData: FormData) {
   })
 
   if (error) {
-    return {
-      error: error.message || 'Erro ao fazer login',
-    }
+    redirect('/login?error=invalid_credentials')
   }
 
   redirect('/dashboard')

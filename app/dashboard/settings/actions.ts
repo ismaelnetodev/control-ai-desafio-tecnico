@@ -3,21 +3,18 @@
 import { createClient } from '@/utils/supabase/server'
 import { encrypt } from '@/lib/crypto'
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 
 export async function saveApiKey(formData: FormData) {
   const apiKey = formData.get('apiKey') as string
 
   if (!apiKey || apiKey.trim() === '') {
-    return {
-      error: 'A chave da API é obrigatória',
-    }
+    redirect('/dashboard/settings?error=api_key_required')
   }
 
   // Validar se a chave começa com "sk-"
   if (!apiKey.startsWith('sk-')) {
-    return {
-      error: 'A chave da API deve começar com "sk-"',
-    }
+    redirect('/dashboard/settings?error=invalid_api_key_format')
   }
 
   const supabase = await createClient()
@@ -26,9 +23,7 @@ export async function saveApiKey(formData: FormData) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return {
-      error: 'Usuário não autenticado',
-    }
+    redirect('/login')
   }
 
   // Buscar perfil e empresa do usuário
@@ -39,9 +34,7 @@ export async function saveApiKey(formData: FormData) {
     .single()
 
   if (perfilError || !perfil?.empresa_id) {
-    return {
-      error: 'Erro ao buscar dados da empresa',
-    }
+    redirect('/dashboard/settings?error=company_not_found')
   }
 
   // Criptografar a chave da API
@@ -50,9 +43,7 @@ export async function saveApiKey(formData: FormData) {
     encryptedKey = encrypt(apiKey)
   } catch (error) {
     console.error('Erro ao criptografar chave:', error)
-    return {
-      error: 'Erro ao criptografar a chave da API',
-    }
+    redirect('/dashboard/settings?error=encryption_failed')
   }
 
   // Atualizar a tabela empresas com a chave criptografada
@@ -63,16 +54,12 @@ export async function saveApiKey(formData: FormData) {
 
   if (updateError) {
     console.error('Erro ao atualizar empresa:', updateError)
-    return {
-      error: 'Erro ao salvar a chave da API',
-    }
+    redirect('/dashboard/settings?error=save_failed')
   }
 
   // Revalidar o caminho para atualizar a página
   revalidatePath('/dashboard/settings')
-
-  return {
-    success: true,
-    message: 'Chave da API salva com sucesso',
-  }
+  
+  // Redirecionar com sucesso
+  redirect('/dashboard/settings?success=true')
 }

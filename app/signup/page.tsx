@@ -10,8 +10,23 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import Link from 'next/link'
+import { AlertCircle } from 'lucide-react'
 
-export default function SignupPage() {
+export default function SignupPage({
+  searchParams,
+}: {
+  searchParams: { error?: string }
+}) {
+  const errorMessages: Record<string, string> = {
+    missing_fields: 'Todos os campos são obrigatórios',
+    auth_error: 'Erro ao criar conta. Email pode já estar em uso.',
+    user_creation_failed: 'Falha ao criar usuário',
+    company_creation_failed: 'Erro ao criar empresa',
+    profile_link_failed: 'Erro ao vincular perfil',
+  }
+
+  const errorMessage = searchParams.error ? errorMessages[searchParams.error] : null
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
       <Card className="w-full max-w-md shadow-lg">
@@ -22,6 +37,13 @@ export default function SignupPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {errorMessage && (
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md flex items-center gap-2 text-red-900 dark:text-red-100">
+              <AlertCircle className="h-4 w-4" />
+              <p className="text-sm">{errorMessage}</p>
+            </div>
+          )}
+
           <form action={signupAction} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="companyName">Nome da Empresa</Label>

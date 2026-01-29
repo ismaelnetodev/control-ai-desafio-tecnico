@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js' // Importe o cliente JS padrão
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 
 export async function signupAction(formData: FormData) {
@@ -10,8 +10,12 @@ export async function signupAction(formData: FormData) {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
 
-  const supabase = await createClient()
+  // Validações
+  if (!companyName || !userName || !email || !password) {
+    redirect('/signup?error=missing_fields')
+  }
 
+  const supabase = await createClient()
 
   const supabaseAdmin = createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,7 +28,6 @@ export async function signupAction(formData: FormData) {
     }
   )
 
-
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
     password,
@@ -33,9 +36,13 @@ export async function signupAction(formData: FormData) {
     },
   })
 
-  if (authError) return { error: authError.message }
+  if (authError) {
+    redirect('/signup?error=auth_error')
+  }
   
-  if (!authData.user) return { error: "Erro ao criar usuário" }
+  if (!authData.user) {
+    redirect('/signup?error=user_creation_failed')
+  }
 
   console.log("Criando empresa via Admin...")
   
@@ -50,10 +57,9 @@ export async function signupAction(formData: FormData) {
 
   if (empresaError) {
     console.error("Erro Admin Empresa:", empresaError)
-    return { error: "Erro ao criar empresa (Admin)" }
+    redirect('/signup?error=company_creation_failed')
   }
 
-  
   const { error: perfilError } = await supabaseAdmin
     .from('perfis')
     .update({ 
@@ -64,7 +70,7 @@ export async function signupAction(formData: FormData) {
 
   if (perfilError) {
     console.error("Erro Admin Perfil:", perfilError)
-    return { error: "Erro ao vincular perfil" }
+    redirect('/signup?error=profile_link_failed')
   }
 
   // Sucesso!
