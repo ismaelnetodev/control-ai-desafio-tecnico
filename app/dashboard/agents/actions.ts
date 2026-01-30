@@ -6,72 +6,42 @@ import { redirect } from 'next/navigation'
 
 export async function createAgent(formData: FormData) {
   const supabase = await createClient()
-
-  // 1. Pega usuário e verifica autenticação
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    redirect('/login')
-  }
+  if (!user) redirect('/login')
 
-  // 2. Busca o ID da empresa e os LIMITES do plano atual
   const { data: perfil } = await supabase
     .from('perfis')
     .select('empresa_id, empresas(plano, max_agentes)')
     .eq('id', user.id)
     .single()
 
-  if (!perfil?.empresa_id) {
-    throw new Error('Empresa não encontrada')
-  }
+  if (!perfil?.empresa_id) throw new Error('Empresa não encontrada')
 
-  const empresaId = perfil.empresa_id
-  
-  // Correção do erro de TypeScript
-  const empresasData = perfil.empresas as { plano: string; max_agentes: number } | { plano: string; max_agentes: number }[] | null
-  let limiteAgentes = 1
-  
-  if (empresasData) {
-    if (Array.isArray(empresasData)) {
-      limiteAgentes = empresasData[0]?.max_agentes || 1
-    } else {
-      limiteAgentes = empresasData.max_agentes || 1
-    }
-  }
+  const empresaData = perfil.empresas as any
+  const empresa = Array.isArray(empresaData) ? empresaData[0] : empresaData
+  const maxAgentes = empresa?.max_agentes || 1
 
-  // 3. CONTAGEM: Verifica quantos agentes a empresa JÁ tem
   const { count, error: countError } = await supabase
     .from('agentes_ia')
     .select('*', { count: 'exact', head: true })
-    .eq('empresa_id', empresaId)
+    .eq('empresa_id', perfil.empresa_id)
     .eq('ativo', true)
 
-  if (countError) {
-    console.error('Erro ao verificar limites:', countError)
-    throw new Error('Erro ao verificar limites do plano')
-  }
+  if (countError) throw new Error('Erro ao verificar limites')
 
-  const agentesAtuais = count || 0
+  if ((count || 0) >= maxAgentes) redirect('/dashboard/subscription')
 
-  // 4. BLOQUEIO: Se atingiu o limite, redireciona para Assinatura
-  if (agentesAtuais >= limiteAgentes) {
-    console.log(`Bloqueio: Limite de ${limiteAgentes} atingido. Redirecionando.`)
-    redirect('/dashboard/subscription')
-  }
-
-  // 5. Pega dados do formulário
   const nome = formData.get('nome') as string
   const prompt = formData.get('prompt') as string
+  const modelo = formData.get('modelo') as string || 'gpt-4o-mini'
   
-  if (!nome || !prompt) {
-    throw new Error('Preencha todos os campos obrigatórios')
-  }
+  if (!nome || !prompt) throw new Error('Preencha todos os campos')
 
-  // 6. Insere no banco
   const { error } = await supabase.from('agentes_ia').insert({
     nome,
     prompt_sistema: prompt,
-    empresa_id: empresaId,
-    modelo: 'gpt-4o-mini',
+    empresa_id: perfil.empresa_id,
+    modelo: modelo,
     ativo: true
   })
 
@@ -80,7 +50,6 @@ export async function createAgent(formData: FormData) {
     throw new Error('Erro ao criar agente')
   }
 
-  // Sucesso! Limpa o cache e redireciona
   revalidatePath('/dashboard/agents')
   redirect('/dashboard/agents')
 }
@@ -88,8 +57,6 @@ export async function createAgent(formData: FormData) {
 export async function deleteAgent(formData: FormData) {
   const id = formData.get('id') as string
   const supabase = await createClient()
-
   await supabase.from('agentes_ia').delete().eq('id', id)
-  
   revalidatePath('/dashboard/agents')
 }
