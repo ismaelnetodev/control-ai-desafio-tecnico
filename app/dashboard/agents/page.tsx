@@ -1,110 +1,129 @@
 import { createClient } from '@/utils/supabase/server'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Bot, MessageSquare, Activity } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Plus, Trash2, Bot, Lock, Zap } from 'lucide-react'
+import Link from 'next/link'
+import { deleteAgent } from './actions'
+import { Badge } from '@/components/ui/badge'
 import { redirect } from 'next/navigation'
 
-export default async function DashboardPage() {
+export default async function AgentsPage() {
   const supabase = await createClient()
   
-  // 1. Verificar usuário
+  // 1. Busca usuário
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    redirect('/login')
-  }
+  if (!user) redirect('/login')
 
-  // 2. Buscar perfil e empresa
+  // 2. Busca empresa E os limites do plano
   const { data: perfil } = await supabase
     .from('perfis')
-    .select('*, empresas(*)')
+    .select('empresa_id, empresas(max_agentes, plano)')
     .eq('id', user.id)
     .single()
 
-  if (!perfil?.empresa_id) {
-    redirect('/login')
-  }
+  if (!perfil?.empresa_id) redirect('/dashboard')
 
-  // Correção do erro de TypeScript
-  const empresasData = perfil.empresas as { nome: string; plano: string } | { nome: string; plano: string }[] | null
-  let empresaNome = 'Sua Empresa'
-  let planoAtual = 'free'
-  
-  if (empresasData) {
-    if (Array.isArray(empresasData)) {
-      empresaNome = empresasData[0]?.nome || 'Sua Empresa'
-      planoAtual = empresasData[0]?.plano || 'free'
-    } else {
-      empresaNome = empresasData.nome || 'Sua Empresa'
-      planoAtual = empresasData.plano || 'free'
-    }
-  }
+  // --- CORREÇÃO DE TIPO (Igual ao Dashboard) ---
+  const empresaData = perfil.empresas as any
+  const empresa = Array.isArray(empresaData) ? empresaData[0] : empresaData
+  const maxAgentes = empresa?.max_agentes || 1
+  // ---------------------------------------------
 
-  // 3. Buscar Métricas (KPIs)
-  
-  // Total de Agentes
-  const { count: totalAgentes } = await supabase
+  // 3. Busca Agentes
+  const { data: agentes } = await supabase
     .from('agentes_ia')
-    .select('*', { count: 'exact', head: true })
+    .select('*')
     .eq('empresa_id', perfil.empresa_id)
+    .order('created_at', { ascending: false })
 
-  // Total de Conversas
-  const { count: totalConversas } = await supabase
-    .from('conversas')
-    .select('*', { count: 'exact', head: true })
-    .eq('empresa_id', perfil.empresa_id)
+  // 4. Verifica se atingiu o limite
+  const totalAgentes = agentes?.length || 0
+  const isLimitReached = totalAgentes >= maxAgentes
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Visão Geral</h1>
-        <p className="text-muted-foreground">
-          Bem-vindo ao painel da {empresaNome}.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Agentes IA</h1>
+          <p className="text-muted-foreground">
+            Gerencie seus assistentes ({totalAgentes} / {maxAgentes} utilizados)
+          </p>
+        </div>
+        
+        {/* LOGICA DO BOTÃO: Se atingiu limite, mostra botão de Upgrade */}
+        {isLimitReached ? (
+          <Link href="/dashboard/subscription">
+            <Button variant="default" className="bg-amber-600 hover:bg-amber-700 text-white">
+              <Zap className="mr-2 h-4 w-4" /> Aumentar Limite
+            </Button>
+          </Link>
+        ) : (
+          <Link href="/dashboard/agents/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" /> Novo Agente
+            </Button>
+          </Link>
+        )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {/* Card Agentes */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Agentes Ativos</CardTitle>
-            <Bot className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalAgentes || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              Assistentes configurados
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* Estado Vazio */}
+        {agentes?.length === 0 && (
+          <div className="col-span-full flex flex-col items-center justify-center py-12 text-muted-foreground bg-slate-50 border border-dashed rounded-lg">
+            <Bot className="h-12 w-12 mb-4 opacity-50" />
+            <p>Nenhum agente criado ainda.</p>
+            <Link href="/dashboard/agents/new" className="mt-4">
+               <Button variant="outline">Criar meu primeiro agente</Button>
+            </Link>
+          </div>
+        )}
 
-        {/* Card Conversas */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Conversas</CardTitle>
-            <MessageSquare className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalConversas || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              Interações registradas
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Card Status */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Status da Conta</CardTitle>
-            <Activity className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold capitalize">
-              {planoAtual}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Plano atual
-            </p>
-          </CardContent>
-        </Card>
+        {/* Lista de Agentes */}
+        {agentes?.map((agente) => (
+          <Card key={agente.id}>
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Bot className="h-5 w-5 text-primary" />
+                  {agente.nome}
+                </CardTitle>
+                <Badge variant="outline">{agente.modelo}</Badge>
+              </div>
+              <CardDescription className="line-clamp-1">
+                 ID: {agente.id.slice(0, 8)}...
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground line-clamp-3 min-h-[60px]">
+                {agente.prompt_sistema}
+              </p>
+            </CardContent>
+            <CardFooter className="justify-between">
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                 <div className={`h-2 w-2 rounded-full ${agente.ativo ? 'bg-green-500' : 'bg-gray-300'}`} />
+                 {agente.ativo ? 'Ativo' : 'Inativo'}
+              </div>
+              
+              <form action={deleteAgent}>
+                <input type="hidden" name="id" value={agente.id} />
+                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </form>
+            </CardFooter>
+          </Card>
+        ))}
+        
+        {/* Card Fantasma (Upsell) se estiver no limite */}
+        {isLimitReached && (
+           <Link href="/dashboard/subscription" className="block h-full">
+             <div className="h-full border border-dashed rounded-lg flex flex-col items-center justify-center p-6 text-muted-foreground hover:bg-slate-50 transition-colors cursor-pointer gap-2">
+                <Lock className="h-8 w-8 opacity-50" />
+                <span className="font-medium">Limite do plano atingido</span>
+                <span className="text-xs text-center">Faça upgrade para criar mais agentes</span>
+             </div>
+           </Link>
+        )}
       </div>
     </div>
   )

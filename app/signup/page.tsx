@@ -10,8 +10,17 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import Link from 'next/link'
+import { AlertCircle } from 'lucide-react'
 
-export default function SignupPage() {
+// Recebe searchParams para ler erro da URL
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ message?: string }>
+}) {
+  const params = await searchParams
+  const errorMessage = params?.message
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
       <Card className="w-full max-w-md shadow-lg">
@@ -23,6 +32,15 @@ export default function SignupPage() {
         </CardHeader>
         <CardContent>
           <form action={signupAction} className="space-y-4">
+            
+            {/* Exibe erro se houver */}
+            {errorMessage && (
+              <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md flex items-center gap-2 border border-red-200">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{decodeURIComponent(errorMessage)}</span>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="companyName">Nome da Empresa</Label>
               <Input
